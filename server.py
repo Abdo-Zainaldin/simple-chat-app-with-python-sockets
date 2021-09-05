@@ -15,34 +15,59 @@ server.listen()
 print(f'[SERVER IS LISTENING] wating for connections...')
 
 # list for clients and ther usernames
-clients = []
+clients = {}
 userNames = []
 
+chat_rooms = {'0':[]}
+
+# disconnecting/deleting clients function
+def disconnect(client):
+    name = list(clients.keys()).index(client)
+    userNames.pop(name)
+    chat_rooms[clients[client]].remove(client)
+    clients.pop(client)
+
 # broadcast message
-def broadcast(msg):
-    for client in clients:
+def broadcast(msg,room):
+    for client in room:
         client.send(msg.encode(FORMAT))
 
 # handle client
 def handle(client,address):
-    name = clients.index(client)
+    name = list(clients.keys()).index(client)
     print(f'[HAS BEING HANDLED] {userNames[name]} , {address}')
     while True:
         try:
             msg = client.recv(HEADER).decode(FORMAT)
+            
+            name = list(clients.keys()).index(client)
 
-            # new
             if msg == DiSCONNECT_MESSAGE:
                 print(f'[HAS LEFT] {userNames[name]}')
                 client.send(DiSCONNECT_MESSAGE.encode(FORMAT))
-                userNames.remove(userNames[name])
-                clients.remove(client)
-                break   
+                disconnect(client)
+                break
+            elif msg.startswith('/'):
+                txtAfterCommand = msg.split()[1]
+                if msg.startswith('/room') and len(msg.split()) > 1:
+                    try:
+                        chat_rooms[txtAfterCommand]
+                    except:
+                        chat_rooms[txtAfterCommand] = []
+                    broadcast(f'{userNames[name]} joind!',chat_rooms[txtAfterCommand])
+                    chat_rooms[clients[client]].remove(client)
+                    clients[client] = txtAfterCommand
+                    chat_rooms[clients[client]].append(client)
+                continue
             elif msg:
-                broadcast(f'{userNames[name]}:{msg}')
+                broadcast(f'{userNames[name]}:{msg}',chat_rooms[clients[client]])
+                # print(f'!=\nclient room = {len(chat_rooms[clients[client]])}')
+                # print(f'0 room = {len(chat_rooms["0"])}')
+                # print(f'lols room = {len(chat_rooms["lols"])}')
+            else:
+                continue
         except:
-            userNames.remove(userNames[name])
-            clients.remove(client)
+            disconnect(client)
             break
 
 # receive connections
@@ -56,11 +81,12 @@ def receive():
         client.send('-NAME-'.encode(FORMAT))
         userName = client.recv(HEADER).decode(FORMAT)
         userNames.append(userName)
-        clients.append(client)
+        clients[client] = '0'
+        chat_rooms['0'].append(client)
         
         # notifi the clients with the new user by ther username
         print(f'[USERNAME] {userName}')
-        broadcast(f'{userName} joind!')
+        broadcast(f'{userName} joind!',chat_rooms['0'])
         client.send('connected to the server'.encode(FORMAT))
 
         # start handling the clients
